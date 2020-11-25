@@ -88,7 +88,7 @@ if( NOT DEFINED CMAKE_CXX_STANDARD )
 endif()
 
 include(CMakeDependentOption)
-CMAKE_DEPENDENT_OPTION(WITH_GFLAGS "build with GFlags" ON
+CMAKE_DEPENDENT_OPTION(WITH_GFLAGS "build with GFlags" OFF
   "NOT MSVC;NOT MINGW" OFF)
 
 if(MSVC)
@@ -778,6 +778,20 @@ set(SOURCES
         utilities/ttl/db_ttl_impl.cc
         utilities/write_batch_with_index/write_batch_with_index.cc
         utilities/write_batch_with_index/write_batch_with_index_internal.cc
+        cloud/aws/aws_env.cc
+        cloud/aws/aws_kafka.cc
+        cloud/aws/aws_kinesis.cc
+        cloud/aws/aws_retry.cc
+        cloud/aws/aws_s3.cc
+        cloud/db_cloud_impl.cc
+        cloud/cloud_env.cc
+        cloud/cloud_env_impl.cc
+        cloud/cloud_env_options.cc
+        cloud/cloud_log_controller.cc
+        cloud/manifest_reader.cc
+        cloud/purge.cc
+        cloud/cloud_manifest.cc
+        db/db_impl/db_impl_remote_compaction.cc
         $<TARGET_OBJECTS:build_version>)
 
 if(HAVE_SSE42 AND NOT MSVC)
@@ -840,7 +854,7 @@ endif()
 set(ROCKSDB_STATIC_LIB rocksdb${ARTIFACT_SUFFIX})
 set(ROCKSDB_SHARED_LIB rocksdb-shared${ARTIFACT_SUFFIX})
 
-option(ROCKSDB_BUILD_SHARED "Build shared versions of the RocksDB libraries" ON)
+option(ROCKSDB_BUILD_SHARED "Build shared versions of the RocksDB libraries" OFF)
 
 option(WITH_LIBRADOS "Build with librados" OFF)
 if(WITH_LIBRADOS)
@@ -1263,3 +1277,96 @@ if(WITH_TOOLS)
   add_custom_target(tools
     DEPENDS ${tool_deps})
 endif()
+
+
+
+# Setup this build to use AWS
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -DUSE_AWS=1 -DUSE_RTTI=1 -DROCKSDB_USE_RTTI  -Wno-inconsistent-missing-override -Wno-shorten-64-to-32 -Wno-error -Wno-deprecated-declarations -Wno-error -Wno-range-loop-analysis ")
+if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -DNDEBUG=1")
+elseif ()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -DNDEBUG=0")
+endif ()
+
+# If we have AWS installed in custome location then we need to add include and lib path to target
+if (AWS_CUSTOM_LOCATION)
+    target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC ${AWS_CUSTOM_LOCATION}/include)
+    # target_link_directories(${ROCKSDB_STATIC_LIB} PRIVATE ${AWS_CUSTOM_LOCATION}/lib)
+
+    if (ROCKSDB_BUILD_SHARED)
+        target_include_directories(${ROCKSDB_SHARED_LIB} PUBLIC ${AWS_CUSTOM_LOCATION}/include)
+        # target_link_directories(${ROCKSDB_SHARED_LIB} PRIVATE ${AWS_CUSTOM_LOCATION}/lib)
+    endif ()
+
+endif ()
+
+
+# This target is added to build the rocks could example for testing
+option(WITH_ROCKS_CLOUD_EXAMPLE "build with rocks cloud example" ON)
+if (WITH_ROCKS_CLOUD_EXAMPLE)
+
+    # Use CoreFoundation if this build is running in MacOS
+    if (APPLE)
+        set(MAC_CORE_FRAMEWORK
+                "-framework CoreFoundation"
+                "-framework CoreFoundation"
+                "-framework CoreGraphics"
+                "-framework CoreData"
+                "-framework CoreText"
+                "-framework Security"
+                "-framework Foundation"
+                "-Wl,-U,_MallocExtension_ReleaseFreeMemory"
+                "-Wl,-U,_ProfilerStart"
+                "-Wl,-U,_ProfilerStop"
+                )
+    else ()
+        set(MAC_CORE_FRAMEWORK "")
+    endif ()
+
+    # Setup custom lib and include path
+    set(ROCKS_CLOUD_EXAMPLE_TARGET rocks_cloud_example)
+
+    add_executable(${ROCKS_CLOUD_EXAMPLE_TARGET} cloud/examples/cloud_durable_example_with_env_var.cc)
+
+    #target_link_directories(${ROCKS_CLOUD_EXAMPLE_TARGET} PRIVATE /usr/local/lib)
+
+    # Add AWS custom path if defined
+    if (AWS_CUSTOM_LOCATION)
+        message(STATUS "Using custom AWS path=${AWS_CUSTOM_LOCATION}")
+        target_include_directories(${ROCKS_CLOUD_EXAMPLE_TARGET} PUBLIC ${AWS_CUSTOM_LOCATION}/include)
+        # target_link_directories(${ROCKS_CLOUD_EXAMPLE_TARGET} PRIVATE ${AWS_CUSTOM_LOCATION}/lib)
+
+    endif ()
+
+    set(ROCKS_DB_TO_LINK "${CMAKE_BINARY_DIR}/lib${ROCKSDB_STATIC_LIB}.a")
+    message(STATUS "RocksDB to link=${ROCKS_DB_TO_LINK}")
+
+    target_link_libraries(
+            ${ROCKS_CLOUD_EXAMPLE_TARGET}
+            LINK_PRIVATE
+
+            -L${AWS_CUSTOM_LOCATION}/lib
+            -laws-checksums
+            -laws-cpp-sdk-kinesis
+            -laws-cpp-sdk-s3
+            -laws-cpp-sdk-transfer
+            -laws-cpp-sdk-core
+            -laws-c-event-stream
+            -laws-c-common
+            -laws-checksums
+
+            -L/usr/local/lib
+            -lcurl
+            -lbz2
+            -lzstd
+            -ljemalloc
+            -lsnappy
+            -lz
+
+            ${MAC_CORE_FRAMEWORK}
+
+            ${ROCKS_DB_TO_LINK}
+    )
+endif ()
+
+
