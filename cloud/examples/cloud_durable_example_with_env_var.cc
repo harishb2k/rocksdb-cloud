@@ -46,6 +46,7 @@ int main() {
   cloud_env_options.credentials.access_key_id = std::getenv("AWS_ACCESS_KEY_ID");
   cloud_env_options.credentials.secret_key = std::getenv("AWS_SECRET_ACCESS_KEY");
   cloud_env_options.keep_local_sst_files = false;
+  cloud_env_options.use_aws_transfer_manager = true;
 
   kBucketSuffix = std::getenv("BUCKET_SUFFIX");
   kRegion = std::getenv("AWS_REGION");

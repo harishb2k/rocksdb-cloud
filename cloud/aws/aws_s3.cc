@@ -864,9 +864,16 @@ Status S3StorageProvider::DoPutCloudObject(const std::string& local_file,
                                            const std::string& object_path,
                                            uint64_t file_size) {
   if (s3client_->HasTransferManager()) {
+#if TEMP_FIX_WRONG_BUCKET_NAME
+    Log(InfoLogLevel::DEBUG_LEVEL, env_->info_log_,"[s3] TEMP_FIX_WRONG_BUCKET_NAME fix is active");
+    auto handle =
+        s3client_->UploadFile(ToAwsString(bucket_name),
+                              ToAwsString(object_path), ToAwsString(local_file), file_size);
+#else
     auto handle =
         s3client_->UploadFile(ToAwsString(local_file), ToAwsString(bucket_name),
                               ToAwsString(object_path), file_size);
+#endif
     if (handle->GetStatus() != Aws::Transfer::TransferStatus::COMPLETED) {
       auto error = handle->GetLastError();
       std::string errmsg(error.GetMessage().c_str(), error.GetMessage().size());

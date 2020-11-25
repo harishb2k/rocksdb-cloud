@@ -1323,6 +1323,11 @@ elseif ()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -DNDEBUG=0")
 endif ()
 
+# There is a bug in RocksCould code where they are not passing bucket name properlly.
+# For not added a hack
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -DTEMP_FIX_WRONG_BUCKET_NAME=1")
+
+
 # This target is added to build the rocks could example for testing
 option(WITH_ROCKS_CLOUD_EXAMPLE "build with rocks cloud example" ON)
 if (WITH_ROCKS_CLOUD_EXAMPLE)
