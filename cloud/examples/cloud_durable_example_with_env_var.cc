@@ -22,6 +22,24 @@ std::string kRegion = "us-west-2";
 static const bool flushAtEnd = true;
 static const bool disableWAL = false;
 
+using namespace rocksdb;
+
+class CustomStderrLogger : public Logger {
+ public:
+  explicit CustomStderrLogger(const InfoLogLevel log_level = InfoLogLevel::DEBUG_LEVEL)
+      : Logger(log_level) {}
+
+  // Brings overloaded Logv()s into scope so they're not hidden when we override
+  // a subset of them.
+  using Logger::Logv;
+
+  virtual void Logv(const char *format, va_list ap) override {
+    vfprintf(stdout, format, ap);
+    fprintf(stdout, "\n");
+  }
+};
+
+
 int main() {
   // cloud environment config options here
   CloudEnvOptions cloud_env_options;
@@ -31,6 +49,7 @@ int main() {
 
   kBucketSuffix = std::getenv("BUCKET_SUFFIX");
   kRegion = std::getenv("AWS_REGION");
+  kDBPath = std::getenv("DB_PATH");
 
   // Store a reference to a cloud env. A new cloud env object should be
   // associated
@@ -63,7 +82,7 @@ int main() {
   CloudEnv* cenv;
   Status s = CloudEnv::NewAwsEnv(Env::Default(), kBucketSuffix, kDBPath,
                                  kRegion, kBucketSuffix, kDBPath, kRegion,
-                                 cloud_env_options, nullptr, &cenv);
+                                 cloud_env_options, std::make_shared<CustomStderrLogger>(), &cenv);
   if (!s.ok()) {
     fprintf(stderr, "Unable to create cloud env in bucket %s. %s\n",
             bucketName.c_str(), s.ToString().c_str());
@@ -75,6 +94,8 @@ int main() {
   Options options;
   options.env = cloud_env.get();
   options.create_if_missing = true;
+  options.info_log = std::make_shared<CustomStderrLogger>();
+  options.info_log_level = DEBUG_LEVEL;
 
   // No persistent read-cache
   std::string persistent_cache = "";

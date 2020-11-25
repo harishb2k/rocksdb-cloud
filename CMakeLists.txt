@@ -791,6 +791,8 @@ set(SOURCES
         cloud/manifest_reader.cc
         cloud/purge.cc
         cloud/cloud_manifest.cc
+        cloud/cloud_scheduler.cc
+        cloud/cloud_storage_provider.cc
         db/db_impl/db_impl_remote_compaction.cc
         $<TARGET_OBJECTS:build_version>)
 
@@ -904,9 +906,9 @@ endif()
 
 option(WITH_JNI "build with JNI" OFF)
 # Tests are excluded from Release builds
-CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" ON
+CMAKE_DEPENDENT_OPTION(WITH_TESTS "build with tests" OFF
   "CMAKE_BUILD_TYPE STREQUAL Debug" OFF)
-option(WITH_BENCHMARK_TOOLS "build with benchmarks" ON)
+option(WITH_BENCHMARK_TOOLS "build with benchmarks" OFF)
 option(WITH_CORE_TOOLS "build with ldb and sst_dump" ON)
 option(WITH_TOOLS "build with tools" ON)
 
@@ -1279,6 +1281,39 @@ if(WITH_TOOLS)
 endif()
 
 
+# Use CoreFoundation if this build is running in MacOS
+if (APPLE)
+  set(MAC_CORE_FRAMEWORK
+          "-framework CoreFoundation"
+          "-framework CoreFoundation"
+          "-framework CoreGraphics"
+          "-framework CoreData"
+          "-framework CoreText"
+          "-framework Security"
+          "-framework Foundation"
+          "-Wl,-U,_MallocExtension_ReleaseFreeMemory"
+          "-Wl,-U,_ProfilerStart"
+          "-Wl,-U,_ProfilerStop"
+          )
+else ()
+  set(MAC_CORE_FRAMEWORK "")
+endif ()
+
+# Setup AWS lib paths
+if (AWS_INCLUDE_PATH)
+  message(ERROR "Using user provided AWS_INCLUDE_PATH=${AWS_INCLUDE_PATH}")
+else()
+  set(AWS_INCLUDE_PATH "/usr/local/include")
+  message(STATUS "Using AWS_INCLUDE_PATH=${AWS_INCLUDE_PATH}")
+endif()
+if (AWS_LIB_PATH)
+  message(STATUS "Using user provided AWS_LIB_PATH=${AWS_LIB_PATH}")
+else()
+  set(AWS_LIB_PATH "/usr/local/lib")
+  message(STATUS "Using AWS_LIB_PATH=${AWS_LIB_PATH}")
+endif()
+
+target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC ${AWS_INCLUDE_PATH})
 
 # Setup this build to use AWS
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -DUSE_AWS=1 -DUSE_RTTI=1 -DROCKSDB_USE_RTTI  -Wno-inconsistent-missing-override -Wno-shorten-64-to-32 -Wno-error -Wno-deprecated-declarations -Wno-error -Wno-range-loop-analysis ")
@@ -1288,64 +1323,25 @@ elseif ()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -DNDEBUG=0")
 endif ()
 
-# If we have AWS installed in custome location then we need to add include and lib path to target
-if (AWS_CUSTOM_LOCATION)
-    target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC ${AWS_CUSTOM_LOCATION}/include)
-    # target_link_directories(${ROCKSDB_STATIC_LIB} PRIVATE ${AWS_CUSTOM_LOCATION}/lib)
-
-    if (ROCKSDB_BUILD_SHARED)
-        target_include_directories(${ROCKSDB_SHARED_LIB} PUBLIC ${AWS_CUSTOM_LOCATION}/include)
-        # target_link_directories(${ROCKSDB_SHARED_LIB} PRIVATE ${AWS_CUSTOM_LOCATION}/lib)
-    endif ()
-
-endif ()
-
-
 # This target is added to build the rocks could example for testing
 option(WITH_ROCKS_CLOUD_EXAMPLE "build with rocks cloud example" ON)
 if (WITH_ROCKS_CLOUD_EXAMPLE)
 
-    # Use CoreFoundation if this build is running in MacOS
-    if (APPLE)
-        set(MAC_CORE_FRAMEWORK
-                "-framework CoreFoundation"
-                "-framework CoreFoundation"
-                "-framework CoreGraphics"
-                "-framework CoreData"
-                "-framework CoreText"
-                "-framework Security"
-                "-framework Foundation"
-                "-Wl,-U,_MallocExtension_ReleaseFreeMemory"
-                "-Wl,-U,_ProfilerStart"
-                "-Wl,-U,_ProfilerStop"
-                )
-    else ()
-        set(MAC_CORE_FRAMEWORK "")
-    endif ()
-
     # Setup custom lib and include path
     set(ROCKS_CLOUD_EXAMPLE_TARGET rocks_cloud_example)
-
     add_executable(${ROCKS_CLOUD_EXAMPLE_TARGET} cloud/examples/cloud_durable_example_with_env_var.cc)
 
-    #target_link_directories(${ROCKS_CLOUD_EXAMPLE_TARGET} PRIVATE /usr/local/lib)
+    # Build ROCKSDB_STATIC_LIB before we build this binary
+    add_dependencies(${ROCKS_CLOUD_EXAMPLE_TARGET} ${ROCKSDB_STATIC_LIB})
 
-    # Add AWS custom path if defined
-    if (AWS_CUSTOM_LOCATION)
-        message(STATUS "Using custom AWS path=${AWS_CUSTOM_LOCATION}")
-        target_include_directories(${ROCKS_CLOUD_EXAMPLE_TARGET} PUBLIC ${AWS_CUSTOM_LOCATION}/include)
-        # target_link_directories(${ROCKS_CLOUD_EXAMPLE_TARGET} PRIVATE ${AWS_CUSTOM_LOCATION}/lib)
-
-    endif ()
-
-    set(ROCKS_DB_TO_LINK "${CMAKE_BINARY_DIR}/lib${ROCKSDB_STATIC_LIB}.a")
+    set(ROCKS_DB_TO_LINK "${rocksdb_BINARY_DIR}/librocksdb.a")
     message(STATUS "RocksDB to link=${ROCKS_DB_TO_LINK}")
 
     target_link_libraries(
             ${ROCKS_CLOUD_EXAMPLE_TARGET}
             LINK_PRIVATE
 
-            -L${AWS_CUSTOM_LOCATION}/lib
+            -L${AWS_LIB_PATH}
             -laws-checksums
             -laws-cpp-sdk-kinesis
             -laws-cpp-sdk-s3
