@@ -1345,29 +1345,37 @@ if (WITH_ROCKS_CLOUD_EXAMPLE)
     target_link_libraries(
             ${ROCKS_CLOUD_EXAMPLE_TARGET}
             LINK_PRIVATE
-
-            -L${AWS_LIB_PATH}
+             ${ROCKS_DB_TO_LINK}
+            -L/usr/local/lib -L/usr/lib/x86_64-linux-gnu
+            -lsnappy
+            -lbz2
+            -ldl
+            -lcurl
+            -lzstd
+            -lbrpc
+            -lpthread
+            -lcrypt
+            -lprotobuf
+            -lz
+            -lssl
+            -lcrypto
+            -laws-c-common
+            -laws-cpp-sdk-core
+            -lcurl
+            -laws-cpp-sdk-core
             -laws-checksums
+            -laws-c-common
             -laws-cpp-sdk-kinesis
             -laws-cpp-sdk-s3
             -laws-cpp-sdk-transfer
             -laws-cpp-sdk-core
+            -laws-checksums
+            -laws-cpp-sdk-kinesis
+            -ldl
+            -lcrypto
             -laws-c-event-stream
             -laws-c-common
             -laws-checksums
-
-            -L/usr/local/lib
-            -lcurl
-            -lcrypto
-            -lbz2
-            -lzstd
-            -ljemalloc
-            -lsnappy
-            -lz
-
-            ${MAC_CORE_FRAMEWORK}
-
-            ${ROCKS_DB_TO_LINK}
     )
 endif ()
 
