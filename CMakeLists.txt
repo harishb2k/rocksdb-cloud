@@ -1296,7 +1296,7 @@ if (APPLE)
           "-Wl,-U,_ProfilerStop"
           )
 else ()
-  set(MAC_CORE_FRAMEWORK "")
+  set(MAC_CORE_FRAMEWORK "-lcrypto")
 endif ()
 
 # Setup AWS lib paths
@@ -1358,7 +1358,6 @@ if (WITH_ROCKS_CLOUD_EXAMPLE)
 
             -L/usr/local/lib
             -lcurl
-            -lcrypto
             -lbz2
             -lzstd
             -ljemalloc
